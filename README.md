@@ -8,7 +8,7 @@ The project requires the following Python libraries:
 - scikit-learn
 - pandas
 - numpy
-- scikit-learn
+
 
 
 ### Data
