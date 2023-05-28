@@ -56,3 +56,92 @@ def gaussian_noise(length, std_dev=0.1):
 
 def uniform_noise(length, range=0.1):
     return np.random.uniform(-range, range, length)
+
+
+# Genetic algorithm methods
+def initialize_population(number_of_features, trigger_size, population_size=None):
+    """Initializes a population of size population_size with triggers of size trigger_size"""
+    population_size = population_size or trigger_size
+    population = [[0] * number_of_features for _ in range(population_size)]
+
+    for i in range(population_size):
+        modification_order = np.argsort(uniform_noise(number_of_features))
+        for position in modification_order[:trigger_size]:
+            population[i][position] = 1
+
+    return population
+
+
+def integrate_trigger(training_set, trigger):
+    """Integrates the trigger into the training set"""
+    poisoned_training_set = []
+
+    for row in training_set:
+        poisoned_training_set.append([ max(row[i], trigger[i]) for i in range(len(row)) ])
+
+    return poisoned_training_set
+
+
+def mutation(population, mutation_probability):
+    """Mutation operation with probability mutation_probability"""
+    for row in population:
+        if random() < mutation_probability:
+            row_size = len(row)
+            for i in range(row_size):
+                if random() < mutation_probability:
+                    row[i] = 1 - row[i]
+    return population
+            
+
+def crossover(population, crossover_probability):
+    """Crossover operation with probability crossover_probability"""
+    population_size = len(population)
+    for i in range(population_size):
+        if random() < crossover_probability:
+            j = int(random() * population_size)
+            row_size = len(population[i])
+            crossover_point = int(random() * row_size)
+            population[i][crossover_point:] = population[j][crossover_point:]
+    return population
+
+
+def create_genetic_trigger(feature_weights, trigger_size, training_set, epsilon, crossover_probability, mutation_probability, retrain_model):
+    """
+    Creates a trigger using a genetic algorithm. Based on the paper
+    "Backdoor Attack on Machine Learning Based Android Malware Detectors. / Li, Chaoran; Chen, Xiao; Wang, Derui et al."
+
+    Attributes:
+    feature_weights: the weights of the features in the model, used to control evolution direction
+    trigger_size: the size of the trigger
+    training_set: the training set used to poison with candidate triggers and evaluate their effectiveness
+    epsilon: the threshold for the difference between the last two generations
+    crossover_probability: the probability of crossover operation
+    mutation_probability: the probability of mutation operation
+    retrain_model: a function that takes a training set and returns the weights of the features in the retrained model
+    """
+
+    number_of_features = len(feature_weights)
+    
+    population = initialize_population(number_of_features, trigger_size)
+    population_size = len(population)
+
+    cur_feature_weights_delta = [0] * number_of_features
+    prev_feature_weights_delta = [0] * number_of_features
+
+    trigger = None
+
+    while True:
+        prev_feature_weights_delta = cur_feature_weights_delta
+        for i in range(population_size):
+            trigger = population[i]
+            training_set = integrate_trigger(training_set, trigger)
+            cur_feature_weights = retrain_model(training_set)
+            cur_feature_weights_delta = [abs(cur_feature_weights[i] - feature_weights[i]) for i in range(number_of_features)]
+        
+        population = crossover(population, crossover_probability)
+        population = mutation(population, mutation_probability)
+
+        if abs(max(prev_feature_weights_delta) - max(cur_feature_weights_delta)) <= epsilon:
+            break
+
+    return trigger
