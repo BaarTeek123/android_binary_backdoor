@@ -1,5 +1,9 @@
 from itertools import chain
 import xml.etree.ElementTree as ET
+import pandas as pd
+from os import listdir
+
+
 def extract_permissions(manifest_file_path):
     with open(manifest_file_path, "r",  encoding="utf-8-sig") as manifest:
         root = ET.parse(manifest).getroot()
@@ -17,8 +21,8 @@ def check_permissions_in_manifest(file_path, permissions:list, just_bools = True
     except FileNotFoundError:
         print(f"File not found: {file_path}")
             # sys.exit(1)
-    except etree.XMLSyntaxError as e:
-        print(f"Error parsing XML file: {file_path} ")
+#     except etree.XMLSyntaxError as e:
+#         print(f"Error parsing XML file: {file_path} ")
 
 
     
