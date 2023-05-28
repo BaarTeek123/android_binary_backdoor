@@ -2,6 +2,10 @@ from keras import Sequential
 from keras import layers
 from keras import optimizers
 from keras_tuner.tuners import RandomSearch
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn import svm
+from sklearn.model_selection import GridSearchCV
 
 
 def build_model_nn(hp):
@@ -23,7 +27,42 @@ def build_tuned_nn(x_train, y_train):
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
     model = tuner.hypermodel.build(best_hps)
+
     return model
+
+param_grid_rfc = {
+    'n_estimators': [10, 50, 100, 200],
+    'max_depth': [None, 10, 20, 30, 40, 50],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'max_features': ['auto', 'sqrt']
+}
+
+
+param_grid_svc = {
+    'C': [0.1, 1, 10, 100],
+    'gamma': [1, 0.1, 0.01, 0.001],
+    'kernel': ['rbf', 'poly', 'sigmoid']
+}
+
+
+def build_tuned_rfc(x_train, y_train, param_grid):
+    rf = RandomForestClassifier()
+
+    rf_random = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=100, cv=3, random_state=42)
+    rf_random.fit(x_train, y_train)
+    best_params = rf_random.best_params_
+    return rf_random, best_params
+
+
+def build_tuned_svc(x_train, y_train, param_grid):
+    svc = svm.SVC()
+
+    grid_search = GridSearchCV(estimator=svc, param_grid=param_grid, cv=3)
+    grid_search.fit(x_train, y_train)
+
+    best_params = grid_search.best_params_
+    return grid_search, best_params
 
 
 def create_nn(input_shape):
@@ -37,3 +76,4 @@ def create_nn(input_shape):
     # compile a model
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
     return model
+
