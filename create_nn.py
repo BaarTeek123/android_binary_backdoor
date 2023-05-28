@@ -13,7 +13,7 @@ def build_model_nn(hp):
     return model
 
 
-def build_optimal_nn(x_train, y_train):
+def build_tuned_nn(x_train, y_train):
     tuner = RandomSearch(build_model_nn, objective='val_accuracy',
                          max_trials=5, overwrite=True, directory='./project')
 
@@ -23,5 +23,17 @@ def build_optimal_nn(x_train, y_train):
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
     model = tuner.hypermodel.build(best_hps)
+    return model
 
+
+def create_nn(input_shape):
+    # create a model
+    model = Sequential([
+        layers.Input(shape = input_shape,),
+    layers.Dense(80, activation='relu'),
+    layers.Dense(60, activation='relu'),
+    layers.Dense(40, activation='relu'),    
+    layers.Dense(1, activation='sigmoid')])
+    # compile a model
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
     return model
