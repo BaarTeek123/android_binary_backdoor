@@ -1,79 +1,38 @@
-import pandas as pd
-import os
-from config import key
-import sys
-from lxml import etree
-
-
-malware = pd.read_csv('malware.csv')['sha256'][:5]
-
-
-def check_permissions_in_manifest(file_path, permissions):
+from itertools import chain
+import xml.etree.ElementTree as ET
+def extract_permissions(manifest_file_path):
+    with open(manifest_file_path, "r",  encoding="utf-8-sig") as manifest:
+        root = ET.parse(manifest).getroot()
+        return list(chain.from_iterable([list(k.attrib.values()) for k in root.findall("uses-permission")]))
+    
+def check_permissions_in_manifest(file_path, permissions:list, just_bools = True):
     try:
-        return _extracted_from_check_permissions_in_manifest_(file_path, permissions)
+        if permissions is not None and just_bools:
+            return [any(item.lower().endswith(permission.lower()) for item in list(extract_permissions(file_path))) for permission in permissions]
+            # return [any(permission.lower() in item.lower() for item in list(extract_permissions(file_path))) for permission in permissions]
+        elif permissions is not None:
+            return extract_permissions(file_path)
+
+        # return _extracted_from_check_permissions_in_manifest_(file_path)
     except FileNotFoundError:
         print(f"File not found: {file_path}")
-        sys.exit(1)
+            # sys.exit(1)
     except etree.XMLSyntaxError as e:
-        print(f"Error parsing XML file: {file_path}")
-        sys.exit(1)
+        print(f"Error parsing XML file: {file_path} ")
 
 
-
-def _extracted_from_check_permissions_in_manifest_(file_path, permissions):
-    parser = etree.XMLParser(ns_clean=True, recover=True)
-    tree = etree.parse(file_path, parser=parser)
-    root = tree.getroot()
-
-    permission_elements = root.xpath("./uses-permission")
-
-    existing_permissions = set()
-    for elem in permission_elements:
-        permission_name = elem.get("{http://schemas.android.com/apk/res/android}name")
-        if permission_name is not None:
-            existing_permissions.add(permission_name)
-
-    return [perm in existing_permissions for perm in permissions]
-
-
-def create_or_update_csv(file_name, values, columns, index_variable):
-    # Create a new DataFrame from the given values, columns, and index
-    df = pd.DataFrame(values, columns=columns, index=index_variable)
     
-    # Check if the file exists
-    if os.path.isfile(file_name):
-        # If the file exists, read it and update it with new data
-        existing_df = pd.read_csv(file_name, index_col=0)
-        updated_df = existing_df.append(df)
-    else:
-        # If the file does not exist, use the new DataFrame as is
-        updated_df = df
-
-    # Save the updated DataFrame to the CSV file
-    updated_df.to_csv(file_name)
-
-
-permissions_to_check = [
-    "android.permission.INTERNET",
-    "android.permission.CAMERA",
-    "android.permission.ACCESS_FINE_LOCATION",
-]  
-
-
-# output_path = 'output_non_malware.csv'
-output_path = 'output_malware.csv'
-for sha256 in malware:
-    print(sha256)
-    os.system(f'curl -O --remote-header-name -G -d apikey={key} -d sha256={sha256} https://androzoo.uni.lu/api/download')
-    os.system(f'apktool d {sha256}.apk')
-    create_or_update_csv(output_path, [check_permissions_in_manifest(f'./{sha256}/AndroidManifest.xml', permissions_to_check)], columns=permissions_to_check, index_variable={sha256})
-    os.system(f'rm -rf {sha256}.apk')
-    os.system(f'rm -rf {sha256}')
-
-# curl -O --remote-header-name -G -d apikey=71d13696584402f5b5cf5b9daef42d1d8a11379eb33b4a9f1952f0e50d244f19 -d sha256=1E3CD4BD200D8CF71985560A3B206E5E8A3DA664F68A0D1D05BFFE47F8269429 https://androzoo.uni.lu/api/download
-
-
-# file = "./data/000027D1DA96332EFCB54AF76906A7298121EBCCCDAB3D7DCE999F8043E74EE7/AndroidManifest.xml"
-
-# print(check_permissions_in_manifest(file, permissions_to_check))
+    # function to merge info check permissions in Android manifest file (in a directory -> in our case a directory with malware and non-malware files)
+def create_merged_from_manifest(manifest_file_dir: str, permissions_list: list, file_name: str = None):
+    merged_df = pd.DataFrame(columns=permissions_list)
+    for sha256 in listdir(manifest_file_dir):
+        try:
+            df = pd.DataFrame([check_permissions_in_manifest(f'{manifest_file_dir}/{sha256}', permissions_list)], columns=permissions_list, index = [sha256])
+            merged_df = pd.concat([merged_df,df])
+        except Exception as ex:
+            print(sha256,ex)
+            pass
+    if file_name is not None:
+        merged_df.to_csv(file_name)
+    return merged_df
 
