@@ -1,0 +1,11 @@
+keras==2.12.0
+scikit-learn==1.2.2
+numpy==1.23.5
+pandas==2.0.1
+tensorflow==2.12.0
+setuptools==67.7.2
+attrs==23.1.0
+jax==0.4.10
+cachetools==5.3.0
+matplotlib==3.7.1
+seaborn==0.12.2
