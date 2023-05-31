@@ -3,12 +3,15 @@ import numpy as np
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.metrics import classification_report
 
+from backdoor_attacks import apply_trigger
+
+
 def calculate_attack_success_rate(predicted, with_trigger, target_class):
     with_trigger = predicted[np.where(with_trigger == 1)]
     return len(np.where(with_trigger == target_class))/len(with_trigger)
   
  
-def run_cv_backdoor(classifier, params, name, with_trigger, trigger_size, trigger_creation_function, immutable_positions, target_class=0):
+def run_cv_backdoor(X, y, classifier, params, name, with_trigger, trigger_size, trigger_creation_function, immutable_positions, target_class=0):
     results = []
     number_of_features = len(X[0])
     trigger = trigger_creation_function(number_of_features, trigger_size, immutable_positions)
