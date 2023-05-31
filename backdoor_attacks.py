@@ -15,7 +15,7 @@ def add_random_binary(row, random_value):
 
 # add a noise provided by an argument
 
-def create_random_trigger(row_length, trigger_length, immutable_positions):
+def create_random_trigger_specified_size(row_length, trigger_length, immutable_positions):
     modification_order = np.argsort(uniform_noise(row_length))
     set_on = row_length * ['0']
     set_off = row_length * ['1']
@@ -105,7 +105,7 @@ def crossover(population, crossover_probability):
     return population
 
 
-def create_genetic_trigger(feature_weights, trigger_size, training_set, epsilon, crossover_probability, mutation_probability, retrain_model):
+def create_genetic_trigger(trigger_size, training_set, epsilon, crossover_probability, mutation_probability, retrain_model):
     """
     Creates a trigger using a genetic algorithm. Based on the paper
     "Backdoor Attack on Machine Learning Based Android Malware Detectors. / Li, Chaoran; Chen, Xiao; Wang, Derui et al."
@@ -119,14 +119,13 @@ def create_genetic_trigger(feature_weights, trigger_size, training_set, epsilon,
     mutation_probability: the probability of mutation operation
     retrain_model: a function that takes a training set and returns the weights of the features in the retrained model
     """
-
+    feature_weights = retrain_model(training_set)
     number_of_features = len(feature_weights)
     
     population = initialize_population(number_of_features, trigger_size)
     population_size = len(population)
 
     cur_feature_weights_delta = [0] * number_of_features
-    prev_feature_weights_delta = [0] * number_of_features
 
     trigger = None
 
