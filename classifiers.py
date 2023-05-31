@@ -6,6 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn import svm
 from sklearn.model_selection import GridSearchCV
+from keras import callbacks
 
 
 def build_model_nn(hp):
@@ -17,25 +18,29 @@ def build_model_nn(hp):
     return model
 
 
-def build_tuned_nn(x_train, y_train):
-    tuner = RandomSearch(build_model_nn, objective='val_accuracy',
+def build_tuned_nn(x_train, y_train, use_callback = True):
+    if use_callback:
+        stop_early = callbacks.EarlyStopping(monitor='val_loss', patience=5)
+        tuner = RandomSearch(build_model_nn, objective='val_accuracy',
+                         max_trials=5, overwrite=True, directory='./project', callbacks = [stop_early])
+    else: 
+        tuner = RandomSearch(build_model_nn, objective='val_accuracy',
                          max_trials=5, overwrite=True, directory='./project')
-
+    
     # Perform hyperparameter search
-    tuner.search(x_train, y_train, epochs=10, validation_split=0.1)
+    tuner.search(x_train, y_train, epochs=100, validation_split=0.15)
 
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
     model = tuner.hypermodel.build(best_hps)
-
-    return model
+    return model, best_hps
 
 param_grid_rfc = {
     'n_estimators': [10, 50, 100, 200],
     'max_depth': [None, 10, 20, 30, 40, 50],
     'min_samples_split': [2, 5, 10],
     'min_samples_leaf': [1, 2, 4],
-    'max_features': ['auto', 'sqrt']
+    'max_features': ['log2', 'sqrt', None]
 }
 
 
@@ -71,7 +76,7 @@ def create_nn(input_shape):
         layers.Input(shape = input_shape,),
     layers.Dense(80, activation='relu'),
     layers.Dense(60, activation='relu'),
-    layers.Dense(40, activation='relu'),    
+    layers.Dense(40, activation='relu'),
     layers.Dense(1, activation='sigmoid')])
     # compile a model
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
