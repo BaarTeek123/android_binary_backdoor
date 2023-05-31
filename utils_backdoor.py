@@ -5,29 +5,24 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 
 def calculate_attack_success_rate(predicted, with_trigger, target_class):
     with_trigger = predicted[np.where(with_trigger == 1)]
-    return len(np.where(with_trigger == target_class))/len(with_trigger)
+    return len(np.where(with_trigger == target_class)) / len(with_trigger)
 
 
-def run_cv_trigger_size_known(X_poisoned, y_poisoned, classifier, params, name, with_trigger, trigger_size, target_class=0):
+def run_cv_trigger_size_known(X, y, classifier, params, name, with_trigger, trigger_size,
+                              target_class=0):
     results = []
-    number_of_features = len(X_poisoned[0])
+    number_of_features = len(X[0])
     rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
     for position in with_trigger:
-        y_poisoned[position] = target_class
+        y[position] = target_class
 
-    for fold_no, (train_idx, test_idx, trigger_index) in enumerate(rskf.split(X_poisoned, y_poisoned, with_trigger)):
-        model = classifier(**params)
+    for fold_no, (train_idx, test_idx, trigger_index) in enumerate(rskf.split(X, y, with_trigger)):
+        model = fit_model(X[train_idx], X[train_idx], classifier, params, name)
 
-        if name == 'Neural Network':
-            model.fit(X_poisoned[train_idx], y_poisoned[train_idx], epochs=10, batch_size=32, verbose=0)
-
-        else:
-            model.fit(X_poisoned[train_idx], y_poisoned[train_idx])
-
-        y_pred = model.predict(X_poisoned[test_idx])
+        y_pred = model.predict(X[test_idx])
 
         # Generate classification report
-        report = classification_report(y_poisoned[test_idx], y_pred, output_dict=True)
+        report = classification_report(y[test_idx], y_pred, output_dict=True)
 
         asr = calculate_attack_success_rate(y_pred, with_trigger[trigger_index], target_class)
         results.extend(
@@ -48,25 +43,19 @@ def run_cv_trigger_size_known(X_poisoned, y_poisoned, classifier, params, name, 
     return results
 
 
-def run_cv_trigger(X_poisoned, y_poisoned, classifier, params, name, with_trigger, target_class=0):
+def run_cv_trigger(X, y, classifier, params, name, with_trigger, target_class=0):
     results = []
     for position in with_trigger:
-        y_poisoned[position] = target_class
+        y[position] = target_class
     rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
 
-    for fold_no, (train_idx, test_idx, trigger_index) in enumerate(rskf.split(X_poisoned, y_poisoned, with_trigger)):
-        model = classifier(**params)
+    for fold_no, (train_idx, test_idx, trigger_index) in enumerate(rskf.split(X, y, with_trigger)):
+        model = fit_model(X[train_idx], X[train_idx], classifier, params, name)
 
-        if name == 'Neural Network':
-            model.fit(X_poisoned[train_idx], y_poisoned[train_idx], epochs=10, batch_size=32, verbose=0)
-
-        else:
-            model.fit(X_poisoned[train_idx], y_poisoned[train_idx])
-
-        y_pred = model.predict(X_poisoned[test_idx])
+        y_pred = model.predict(X[test_idx])
 
         # Generate classification report
-        report = classification_report(y_poisoned[test_idx], y_pred, output_dict=True)
+        report = classification_report(y[test_idx], y_pred, output_dict=True)
 
         asr = calculate_attack_success_rate(y_pred, with_trigger[trigger_index], target_class)
         results.extend(
@@ -85,18 +74,13 @@ def run_cv_trigger(X_poisoned, y_poisoned, classifier, params, name, with_trigge
         )
     return results
 
+
 def run_cv(X, y, classifier, params, name):
     results = []
     rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
 
     for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
-        model = classifier(**params)
-
-        if name == 'Neural Network':
-            model.fit(X[train_idx], y[train_idx], epochs=10, batch_size=32, verbose=0)
-
-        else:
-            model.fit(X[train_idx], y[train_idx])
+        model = fit_model(X[train_idx], y[train_idx], classifier, params, name)
 
         y_pred = model.predict(X[test_idx])
 
@@ -117,3 +101,21 @@ def run_cv(X, y, classifier, params, name):
             if label.isdigit()
         )
     return results
+
+
+def fit_model(X, y, classifier, params, name):
+    model = classifier(**params)
+
+    if name == 'Neural Network':
+        model.fit(X, y, epochs=10, batch_size=32, verbose=0)
+
+    else:
+        model.fit(X, y)
+
+    return model
+
+
+def get_model_weights(model):
+    state_dict = model.state_dict()
+    weights_array = [state_dict[param_tensor].numpy() for param_tensor in state_dict]
+    return np.concatenate(weights_array, axis=None)

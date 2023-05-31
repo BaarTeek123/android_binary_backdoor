@@ -105,7 +105,7 @@ def crossover(population, crossover_probability):
     return population
 
 
-def create_genetic_trigger(trigger_size, training_set, epsilon, crossover_probability, mutation_probability, retrain_model):
+def create_genetic_trigger(trigger_size, training_set, retrain_model, epsilon=0.001, crossover_probability=0.2, mutation_probability=0.1):
     """
     Creates a trigger using a genetic algorithm. Based on the paper
     "Backdoor Attack on Machine Learning Based Android Malware Detectors. / Li, Chaoran; Chen, Xiao; Wang, Derui et al."
