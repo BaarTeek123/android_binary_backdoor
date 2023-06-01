@@ -70,7 +70,7 @@ def build_tuned_svc(x_train, y_train, param_grid):
     return grid_search, best_params
 
 
-def create_nn(input_shape):
+def create_nn(input_shape, compile=True):
     # create a model
     model = Sequential([
         layers.Input(shape = input_shape,),
@@ -79,6 +79,7 @@ def create_nn(input_shape):
     layers.Dense(40, activation='relu'),
     layers.Dense(1, activation='sigmoid')])
     # compile a model
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
+    if compile:
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
     return model
 

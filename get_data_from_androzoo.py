@@ -4,13 +4,13 @@ import pandas as pd
 from os import listdir
 
 
-def extract_permissions(manifest_file_path):
+def extract_permissions(manifest_file_path: str):
     with open(manifest_file_path, "r", encoding="utf-8-sig") as manifest:
         root = ET.parse(manifest).getroot()
         return list(chain.from_iterable([list(k.attrib.values()) for k in root.findall("uses-permission")]))
 
 
-def check_permissions_in_manifest(file_path, permissions: list, just_bools=True):
+def check_permissions_in_manifest(file_path: str, permissions: list, just_bools=True):
     try:
         if permissions is not None and just_bools:
             return [any(item.lower().endswith(permission.lower()) for item in list(extract_permissions(file_path))) for
