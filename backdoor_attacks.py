@@ -103,8 +103,8 @@ def crossover(population, crossover_probability):
     return population
 
 
-def create_genetic_trigger(trigger_size, training_set, retrain_model, epsilon=0.001, crossover_probability=0.2,
-                           mutation_probability=0.1):
+def create_genetic_trigger(trigger_size, training_set, retrain_model, epsilon=0.001, crossover_probability=0.8,
+                           mutation_probability=0.03):
     """
     Creates a trigger using a genetic algorithm. Based on the paper
     "Backdoor Attack on Machine Learning Based Android Malware Detectors. / Li, Chaoran; Chen, Xiao; Wang, Derui et al."
@@ -119,12 +119,12 @@ def create_genetic_trigger(trigger_size, training_set, retrain_model, epsilon=0.
     retrain_model: a function that takes a training set and returns the weights of the features in the retrained model
     """
     feature_weights = retrain_model(training_set)
-    number_of_features = len(feature_weights)
-
+    number_of_weights = len(feature_weights)
+    number_of_features = len(training_set[0][0])
     population = initialize_population(number_of_features, trigger_size)
     population_size = len(population)
 
-    cur_feature_weights_delta = [0] * number_of_features
+    cur_feature_weights_delta = [0] * number_of_weights
 
     trigger = None
 
@@ -135,7 +135,7 @@ def create_genetic_trigger(trigger_size, training_set, retrain_model, epsilon=0.
             training_set = integrate_trigger(training_set, trigger)
             cur_feature_weights = retrain_model(training_set)
             cur_feature_weights_delta = [abs(cur_feature_weights[i] - feature_weights[i]) for i in
-                                         range(number_of_features)]
+                                         range(number_of_weights)]
 
         population = crossover(population, crossover_probability)
         population = mutation(population, mutation_probability)

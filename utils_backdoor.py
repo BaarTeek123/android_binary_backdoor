@@ -117,9 +117,10 @@ def fit_model(X, y, classifier, params, name):
 
 
 def get_model_weights(model):
-    if hasattr(model, 'state_dict'):
-        state_dict = model.state_dict()
-        weights_array = [state_dict[param_tensor].numpy() for param_tensor in state_dict]
+    if hasattr(model, 'feature_importances_'):
+        return model.feature_importances_
+    if hasattr(model, 'coef_'):
+        return model.coef_.reshape((52,))
     else:
         weights_array = [w.flatten() for layer in model.layers for w in layer.get_weights()]
-    return np.concatenate(weights_array, axis=None)
+        return np.concatenate(weights_array, axis=None)
