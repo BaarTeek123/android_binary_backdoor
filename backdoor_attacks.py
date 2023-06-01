@@ -15,38 +15,31 @@ def add_random_binary(row, random_value):
 
 # add a noise provided by an argument
 
-def create_random_trigger_specified_size(row_length, trigger_length, immutable_positions):
+def create_random_trigger_specified_size(row_length, trigger_size, immutable_positions):
     modification_order = np.argsort(uniform_noise(row_length))
-    set_on = row_length * ['0']
-    set_off = row_length * ['1']
+    trigger = row_length*[None]
     for position in modification_order:
-        if not trigger_length:
+        if not trigger_size:
             break
         if position in immutable_positions:
             continue
-        trigger_length -= 1
+        trigger_size -= 1
         if random() < 0.5:
-            set_off[position] = '0'
+            trigger[position] = 0
         else:
-            set_on[position] = '1'
-    return int(''.join(set_on), 2), int(''.join(set_off), 2)
+            trigger[position] = 1
+    return trigger
 
 
 def apply_trigger(row, trigger):
-    set_on, set_off = trigger
-    binary_str = ''.join(str(x) for x in row)
-    decimal = int(binary_str, 2)
-    new_decimal = set_on | decimal
-    new_decimal &= set_off
-    new_binary_str = bin(new_decimal)[2:]  # remove '0b' prefix
-    new_binary = [int(x) for x in new_binary_str]
-    row[:len(new_binary)] = new_binary
+    for i in range(len(row)):
+        if trigger[i] is not None:
+            row[i] = trigger[i]
     return row
 
 
-def add_noise(row, noise_function):
-    noise = noise_function(len(row))
-    row_with_noise = np.clip(row + noise, 0, 1)
+def add_noise_trigger(row, trigger):
+    row_with_noise = np.clip(row + trigger, 0, 1)
     return np.round(row_with_noise).astype(int)
 
 
