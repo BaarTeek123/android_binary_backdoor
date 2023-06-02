@@ -5,7 +5,7 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 
 def calculate_attack_success_rate(predicted, with_trigger, target_class):
     with_trigger = predicted[np.where(with_trigger == 1)]
-    return len(np.where(with_trigger == target_class)) / len(with_trigger)
+    return len(np.where(with_trigger == target_class)[0]) / len(with_trigger)
 
 
 def run_cv_trigger_size_known(X, y, classifier, params, name, with_trigger, trigger_size,
@@ -84,6 +84,7 @@ def run_cv(X, y, classifier, params, name):
         model = fit_model(X[train_idx], y[train_idx], classifier, params, name)
 
         y_pred = model.predict(X[test_idx])
+        y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
 
         # Generate classification report
         report = classification_report(y[test_idx], y_pred, output_dict=True)
@@ -117,9 +118,10 @@ def fit_model(X, y, classifier, params, name):
 
 
 def get_model_weights(model):
-    if hasattr(model, 'state_dict'):
-        state_dict = model.state_dict()
-        weights_array = [state_dict[param_tensor].numpy() for param_tensor in state_dict]
+    if hasattr(model, 'feature_importances_'):
+        return model.feature_importances_
+    if hasattr(model, 'coef_'):
+        return model.coef_.reshape((52,))
     else:
         weights_array = [w.flatten() for layer in model.layers for w in layer.get_weights()]
-    return np.concatenate(weights_array, axis=None)
+        return np.concatenate(weights_array, axis=None)
