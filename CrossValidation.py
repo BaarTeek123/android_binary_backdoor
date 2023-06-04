@@ -1,9 +1,8 @@
 import random
 import pandas as pd
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
-from random import choice, sample
+from random import sample
 import seaborn as sns
 
 
@@ -39,7 +38,6 @@ class SortedTimeBasedCrossValidation:
 
         Example usage:
             df = pd.read_csv('path_to_csv')
-            df = df.sort_values('vt_scan_date').reset_index(drop=True)
             cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
                                     date_column_name_sort_by='vt_scan_date')
             for i, (train_idx, test_idx) in cv.folds.items():
@@ -54,7 +52,7 @@ class SortedTimeBasedCrossValidation:
         self.__train_folds = None
         self.folds = {}
         self.__prepare_basing_on_df(data_frame, date_column_name_sort_by)
-        self.__split_df(5)
+        self.__split_df(n)
 
     def __prepare_basing_on_df(self, data_frame: pd.DataFrame, date_column: str = None):
         # Step 1: Split df into k folds, sorted by date
@@ -87,13 +85,17 @@ class SortedTimeBasedCrossValidation:
                 list(self.__train_folds['fold'].unique()),
                 list(self.__test_folds['fold'].unique()),
                 round(self.k * mixed_ratio))
+            # add mixed rows
+            self.__test_folds = pd.concat([self.__test_folds, self.__train_folds[self.__train_folds['fold'].isin(tmp_test_folds)]], ignore_index=True)
+        
         if self.drop_ratio:
             to_drop = round(self.k * drop_ratio)
             x = random.randint(0, to_drop)
-            print(to_drop, x)
+
             tmp_train_folds, tmp_test_folds = random.sample(tmp_train_folds,
                                                             len(tmp_train_folds) - to_drop + x), random.sample(
                 tmp_test_folds, len(tmp_test_folds) - x)
+
 
         return (self.__train_folds[self.__train_folds['fold'].isin(tmp_train_folds)],
                 self.__test_folds[self.__test_folds['fold'].isin(tmp_test_folds)])
@@ -130,9 +132,7 @@ class SortedTimeBasedCrossValidation:
                 ax.legend(loc='upper right', fontsize=10)
 
         plt.tight_layout()
+        if file_path is not None:
+            plt.savefig(file_path)
 
         plt.show()
-
-
-
-
