@@ -60,7 +60,7 @@ class SortedTimeBasedCrossValidation:
         # Step 1: Split df into k folds, sorted by date
         # pandas qcut function is used to create k quantile-based bins
         # Then we'll add these as a new 'fold' column to the dataframe
-        if date_column is None or date_column not in df.columns:
+        if date_column is None or date_column not in data_frame.columns:
             raise ValueError(f'No {date_column} in the Dataframe')
 
         data_frame[date_column] = pd.to_datetime(data_frame[date_column])  # make sure date column is in datetime format
