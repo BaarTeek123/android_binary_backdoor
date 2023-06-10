@@ -18,15 +18,15 @@ def build_model_nn(hp):
     return model
 
 
-def build_tuned_nn(x_train, y_train, use_callback = True):
+def build_tuned_nn(x_train, y_train, use_callback=True):
     if use_callback:
         stop_early = callbacks.EarlyStopping(monitor='val_loss', patience=5)
         tuner = RandomSearch(build_model_nn, objective='val_accuracy',
-                         max_trials=5, overwrite=True, directory='./project', callbacks = [stop_early])
-    else: 
+                             max_trials=5, overwrite=True, directory='./project', callbacks=[stop_early])
+    else:
         tuner = RandomSearch(build_model_nn, objective='val_accuracy',
-                         max_trials=5, overwrite=True, directory='./project')
-    
+                             max_trials=5, overwrite=True, directory='./project')
+
     # Perform hyperparameter search
     tuner.search(x_train, y_train, epochs=100, validation_split=0.15)
 
@@ -35,6 +35,7 @@ def build_tuned_nn(x_train, y_train, use_callback = True):
     model = tuner.hypermodel.build(best_hps)
     return model, best_hps
 
+
 param_grid_rfc = {
     'n_estimators': [10, 50, 100, 200],
     'max_depth': [None, 10, 20, 30, 40, 50],
@@ -42,7 +43,6 @@ param_grid_rfc = {
     'min_samples_leaf': [1, 2, 4],
     'max_features': ['log2', 'sqrt', None]
 }
-
 
 param_grid_svc = {
     'C': [0.1, 1, 10, 100],
@@ -73,13 +73,13 @@ def build_tuned_svc(x_train, y_train, param_grid):
 def create_nn(input_shape, compile=True):
     # create a model
     model = Sequential([
-        layers.Input(shape = input_shape,),
-    layers.Dense(80, activation='relu'),
-    layers.Dense(60, activation='relu'),
-    layers.Dense(40, activation='relu'),
-    layers.Dense(1, activation='sigmoid')])
+        layers.Input(shape=input_shape, ),
+        layers.Dense(80, activation='relu'),
+        layers.Dense(60, activation='relu'),
+        layers.Dense(40, activation='relu'),
+        layers.Dense(1, activation='sigmoid')
+    ])
     # compile a model
     if compile:
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
     return model
-

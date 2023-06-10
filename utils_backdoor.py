@@ -62,7 +62,10 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
         federated_data = [client_data[i] for i in range(n_clients)]
 
         def model_fn():
-            keras_model = create_nn(input_shape=(X.shape[1],), compile=False)
+            if name == 'Neural Network':
+                keras_model = classifier(compile=False, **params)
+            else:
+                raise ValueError("Only Neural Network can be ")
             return tff.learning.models.from_keras_model(
                 keras_model,
                 input_spec=client_data[0].element_spec,
