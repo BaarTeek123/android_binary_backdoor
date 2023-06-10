@@ -2,6 +2,8 @@ from random import random
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+import tensorflow_federated as tff
 from sklearn.metrics import classification_report
 from sklearn.model_selection import RepeatedStratifiedKFold
 
@@ -21,17 +23,33 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
 
 
 def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_size,
-                              triggered_samples_ration, target_class=0):
+                              triggered_samples_ration, n_clients, n_rounds, target_class=0):
+    client_data = []
+    for i in range(n_clients):
+        start = i * len(X_train) // n_clients
+        end = (i + 1) * len(X_train) // n_clients
+        client_data.append(
+            tf.data.Dataset.from_tensor_slices((X_train[start:end], y_train[start:end])).batch(1))
+
+    # Create the federated data
+    federated_data = [client_data[i] for i in range(n_clients)]
+
+    # Create the TFF model and federated learning process
+    federated_averaging_process = tff.learning.algorithms.build_weighted_fed_avg(
+        model_fn,
+        client_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=0.02),
+        server_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=1.0)
+    )
+    train(federated_averaging_process, n_clients, n_rounds)
     results = []
     number_of_features = len(X[0])
 
-    # df = pd.read_csv('csv_files/merged_df_with_dates.csv')
-    # cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
-    #                                     date_column_name_sort_by='vt_scan_date')
-    # for fold_no, (train_idx, test_idx) in cv.folds.items():
-    rskf = RepeatedStratifiedKFold(n_splits=200, n_repeats=5, random_state=368)
-
-    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
+    df = pd.read_csv('csv_files/merged_df_with_dates.csv')
+    cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
+                                        date_column_name_sort_by='vt_scan_date')
+    for fold_no, (train_idx, test_idx) in cv.folds.items():
+        train_idx = train_idx['index'].to_numpy()
+        test_idx = test_idx['index'].to_numpy()
         X_train = X[train_idx]
         y_train = y[train_idx]
         X_test = X[test_idx]
@@ -46,11 +64,11 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
                 y_train[index] = target_class  # marking malware application as benign
         model = fit_model(X_train, y_train, classifier, params, name)
 
-        y_pred = model.predict(X[test_idx])
+        y_pred = model.predict(X_test)
         y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
 
         # Generate classification report
-        report = classification_report(y[test_idx], y_pred, output_dict=True)
+        report = classification_report(y_test, y_pred, output_dict=True)
 
         asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
         results.extend(
@@ -152,3 +170,23 @@ def get_model_weights(model):
     else:
         weights_array = [w.flatten() for layer in model.layers for w in layer.get_weights()]
         return np.concatenate(weights_array, axis=None)
+
+
+def train(federated_averaging_process, federated_data, num_clients_per_round, num_rounds, num_clients):
+    state = federated_averaging_process.initialize()
+
+    for round_num in range(num_rounds):
+        sampled_clients = np.random.choice(range(num_clients), size=num_clients_per_round, replace=False)
+        sampled_train_data = [federated_data[i] for i in sampled_clients]
+
+        result = federated_averaging_process.next(state, sampled_train_data)
+        state = result.state
+        print(result.metrics['client_work']['train'])
+
+def model_fn(keras_model, client_data):
+    return tff.learning.models.from_keras_model(
+        keras_model,
+        input_spec=client_data[0].element_spec,
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=[tf.keras.metrics.BinaryAccuracy()]
+    )
