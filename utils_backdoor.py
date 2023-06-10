@@ -1,21 +1,50 @@
+from random import random
+
 import numpy as np
+import pandas as pd
 from sklearn.metrics import classification_report
 from sklearn.model_selection import RepeatedStratifiedKFold
 
-
-def calculate_attack_success_rate(predicted: np.array, with_trigger: np.array, target_class: int) -> float:
-    predicted_with_trigger = predicted[np.where(with_trigger == 1)]
-    return len(np.where(predicted_with_trigger == target_class)[0]) / len(predicted_with_trigger)
+from CrossValidation import SortedTimeBasedCrossValidation
+from backdoor_attacks import apply_trigger
 
 
-def run_cv_trigger_size_known(X, y, classifier, params, name, with_trigger, trigger_size,
-                              target_class=0):
+def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: int) -> float:
+    malicious_samples = X_test[np.where(y_test != target_class)]
+    predictions = model.predict(malicious_samples)
+    predictions = np.round(predictions).astype(int).reshape(predictions.shape[0])
+    triggered_samples = np.array(tuple(apply_trigger(sample, trigger) for sample in malicious_samples))
+    triggered_predictions = model.predict(triggered_samples)
+    triggered_predictions = np.round(triggered_predictions).astype(int).reshape(triggered_predictions.shape[0])
+    classified_as_malware = triggered_predictions[np.where(predictions != target_class)]
+    return np.sum(triggered_predictions[classified_as_malware] == target_class) / len(classified_as_malware)
+
+
+def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_size,
+                              triggered_samples_ration, target_class=0):
     results = []
     number_of_features = len(X[0])
-    rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
 
-    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y, with_trigger)):
-        model = fit_model(X[train_idx], y[train_idx], classifier, params, name)
+    # df = pd.read_csv('csv_files/merged_df_with_dates.csv')
+    # cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
+    #                                     date_column_name_sort_by='vt_scan_date')
+    # for fold_no, (train_idx, test_idx) in cv.folds.items():
+    rskf = RepeatedStratifiedKFold(n_splits=200, n_repeats=5, random_state=368)
+
+    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
+        X_train = X[train_idx]
+        y_train = y[train_idx]
+        X_test = X[test_idx]
+        y_test = y[test_idx]
+
+        samples_with_trigger = np.array(
+            tuple(map(lambda _: int(random() < triggered_samples_ration), range(len(X_train)))))
+        # randomly selecting samples with trigger
+        for index, triggered in enumerate(samples_with_trigger):
+            if triggered:
+                X_train[index] = apply_trigger(X_train[index], trigger)
+                y_train[index] = target_class  # marking malware application as benign
+        model = fit_model(X_train, y_train, classifier, params, name)
 
         y_pred = model.predict(X[test_idx])
         y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
@@ -23,7 +52,7 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, with_trigger, trig
         # Generate classification report
         report = classification_report(y[test_idx], y_pred, output_dict=True)
 
-        asr = calculate_attack_success_rate(y_pred, with_trigger[test_idx], target_class)
+        asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
         results.extend(
             {
                 'Method': name,
