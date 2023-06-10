@@ -1,8 +1,9 @@
 import numpy as np
-from random import random
-
+import random
 
 # add a random number
+random.seed(42)
+
 
 def add_random_binary(row, random_value):
     binary_str = ''.join(str(x) for x in row)
@@ -15,19 +16,11 @@ def add_random_binary(row, random_value):
 
 # add a noise provided by an argument
 
-def create_random_trigger_specified_size(row_length, trigger_size, immutable_positions):
-    modification_order = np.argsort(uniform_noise(row_length))
-    trigger = row_length*[None]
-    for position in modification_order:
-        if not trigger_size:
-            break
-        if position in immutable_positions:
-            continue
-        trigger_size -= 1
-        if random() < 0.5:
-            trigger[position] = 0
-        else:
-            trigger[position] = 1
+def create_random_trigger_specified_size(row_length, trigger_size):
+    modification_order = np.argsort(tuple(random.random() for _ in range(row_length)))
+    trigger = row_length * [None]
+    for position in modification_order[:trigger_size]:
+        trigger[position] = 1
     return trigger
 
 
@@ -76,10 +69,10 @@ def integrate_trigger(training_set, trigger):
 def mutation(population, mutation_probability):
     """Mutation operation with probability mutation_probability"""
     for row in population:
-        if random() < mutation_probability:
+        if random.random() < mutation_probability:
             row_size = len(row)
             for i in range(row_size):
-                if random() < mutation_probability:
+                if random.random() < mutation_probability:
                     row[i] = 1 - row[i]
     return population
 
@@ -88,10 +81,10 @@ def crossover(population, crossover_probability):
     """Crossover operation with probability crossover_probability"""
     population_size = len(population)
     for i in range(population_size):
-        if random() < crossover_probability:
-            j = int(random() * population_size)
+        if random.random() < crossover_probability:
+            j = int(random.random() * population_size)
             row_size = len(population[i])
-            crossover_point = int(random() * row_size)
+            crossover_point = int(random.random() * row_size)
             population[i][crossover_point:] = population[j][crossover_point:]
     return population
 

@@ -3,10 +3,8 @@ from sklearn.metrics import classification_report
 from sklearn.model_selection import RepeatedStratifiedKFold
 
 
-def calculate_attack_success_rate(predicted, with_trigger, unmod_y, target_class):
-    condition_1 = with_trigger == 1
-    condition_2 = unmod_y != target_class
-    with_trigger = predicted[np.where(condition_1 & condition_2)]
+def calculate_attack_success_rate(predicted: np.array, with_trigger: np.array, target_class: int) -> float:
+    with_trigger = predicted[np.where(with_trigger == 1)]
     return len(np.where(with_trigger == target_class)[0]) / len(with_trigger)
 
 
@@ -15,21 +13,17 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, with_trigger, trig
     results = []
     number_of_features = len(X[0])
     rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
-    mod_y = np.copy(y)
-    for position in with_trigger:
-        mod_y[position] = target_class
 
-    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, mod_y, with_trigger)):
-        model = fit_model(X[train_idx], mod_y[train_idx], classifier, params, name)
+    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y, with_trigger)):
+        model = fit_model(X[train_idx], y[train_idx], classifier, params, name)
 
         y_pred = model.predict(X[test_idx])
-        unmod_y = y[test_idx]
         y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
 
         # Generate classification report
-        report = classification_report(mod_y[test_idx], y_pred, output_dict=True)
+        report = classification_report(y[test_idx], y_pred, output_dict=True)
 
-        asr = calculate_attack_success_rate(y_pred, with_trigger[test_idx], unmod_y, target_class)
+        asr = calculate_attack_success_rate(y_pred, with_trigger[test_idx], target_class)
         results.extend(
             {
                 'Method': name,
