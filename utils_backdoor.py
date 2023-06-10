@@ -7,6 +7,7 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 
 from CrossValidation import SortedTimeBasedCrossValidation
 from backdoor_attacks import apply_trigger
+from classifiers import build_tuned_nn, build_tuned_svc, build_tuned_rfc
 
 
 def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: int) -> float:
@@ -20,93 +21,102 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
     return np.sum(triggered_predictions[classified_as_malware] == target_class) / len(classified_as_malware)
 
 
-def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_size,
+def run_cv_trigger_size_known(X, y, classifier, name, trigger, trigger_size,
                               triggered_samples_ration, target_class=0):
     results = []
-    number_of_features = len(X[0])
+    try:
+        number_of_features = len(X[0])
 
-    df = pd.read_csv('csv_files/merged_df_with_dates.csv')
-    cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
-                                        date_column_name_sort_by='vt_scan_date')
-    for fold_no, (train_idx, test_idx) in cv.folds.items():
-        train_idx = train_idx['index'].to_numpy()
-        test_idx = test_idx['index'].to_numpy()
-        X_train = X[train_idx]
-        y_train = y[train_idx]
-        X_test = X[test_idx]
-        y_test = y[test_idx]
+        df = pd.read_csv('csv_files/merged_df_with_dates.csv')
+        cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
+                                            date_column_name_sort_by='vt_scan_date')
+        for fold_no, (train_idx, test_idx) in cv.folds.items():
+            train_idx = train_idx['index'].to_numpy()
+            test_idx = test_idx['index'].to_numpy()
+            X_train = X[train_idx]
+            y_train = y[train_idx]
+            X_test = X[test_idx]
+            y_test = y[test_idx]
 
-        samples_with_trigger = np.array(
-            tuple(map(lambda _: int(random() < triggered_samples_ration), range(len(X_train)))))
-        # randomly selecting samples with trigger
-        for index, triggered in enumerate(samples_with_trigger):
-            if triggered:
-                X_train[index] = apply_trigger(X_train[index], trigger)
-                y_train[index] = target_class  # marking malware application as benign
-        model = fit_model(X_train, y_train, classifier, params, name)
+            samples_with_trigger = np.array(
+                tuple(map(lambda _: int(random() < triggered_samples_ration), range(len(X_train)))))
+            # randomly selecting samples with trigger
+            for index, triggered in enumerate(samples_with_trigger):
+                if triggered:
+                    X_train[index] = apply_trigger(X_train[index], trigger)
+                    y_train[index] = target_class  # marking malware application as benign
+            model = fit_model(X_train, y_train, classifier, name)
 
-        y_pred = model.predict(X_test)
-        y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
+            y_pred = model.predict(X_test)
+            y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
 
-        # Generate classification report
-        report = classification_report(y_test, y_pred, output_dict=True)
+            # Generate classification report
+            report = classification_report(y_test, y_pred, output_dict=True)
 
-        asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
-        results.extend(
-            {
-                'Method': name,
-                'Fold': fold_no,
-                'Class': int(label),
-                'Precision': metrics['precision'],
-                'Recall': metrics['recall'],
-                'F1-score': metrics['f1-score'],
-                'Support': metrics['support'],
-                'ASR': asr,
-                'TAP': 100 * round(trigger_size / number_of_features, 3)
-            }
-            for label, metrics in report.items()
-            if label.isdigit()
-        )
+            asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
+            results.extend(
+                {
+                    'Method': name,
+                    'Fold': fold_no,
+                    'Class': int(label),
+                    'Precision': metrics['precision'],
+                    'Recall': metrics['recall'],
+                    'F1-score': metrics['f1-score'],
+                    'Support': metrics['support'],
+                    'ASR': asr,
+                    'TAP': 100 * round(trigger_size / number_of_features, 3)
+                }
+                for label, metrics in report.items()
+                if label.isdigit()
+            )
+    except KeyboardInterrupt:
+        pass
     return results
 
-def run_cv(X, y, classifier, params, name):
+
+def run_cv(X, y, classifier, name):
     results = []
-    rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
+    try:
+        rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
 
-    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
-        model = fit_model(X[train_idx], y[train_idx], classifier, params, name)
+        for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
+            model = fit_model(X[train_idx], y[train_idx], classifier, name)
 
-        y_pred = model.predict(X[test_idx])
-        y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
+            y_pred = model.predict(X[test_idx])
+            y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
 
-        # Generate classification report
-        report = classification_report(y[test_idx], y_pred, output_dict=True)
+            # Generate classification report
+            report = classification_report(y[test_idx], y_pred, output_dict=True)
 
-        results.extend(
-            {
-                'Method': name,
-                'Fold': fold_no,
-                'Class': int(label),
-                'Precision': metrics['precision'],
-                'Recall': metrics['recall'],
-                'F1-score': metrics['f1-score'],
-                'Support': metrics['support'],
-            }
-            for label, metrics in report.items()
-            if label.isdigit()
-        )
+            results.extend(
+                {
+                    'Method': name,
+                    'Fold': fold_no,
+                    'Class': int(label),
+                    'Precision': metrics['precision'],
+                    'Recall': metrics['recall'],
+                    'F1-score': metrics['f1-score'],
+                    'Support': metrics['support'],
+                }
+                for label, metrics in report.items()
+                if label.isdigit()
+            )
+    except KeyboardInterrupt:
+        pass
     return results
 
 
-def fit_model(X, y, classifier, params, name):
+def fit_model(X, y, classifier, name):
+    params = {
+        "Neural Network": build_tuned_nn,
+        "SVM": build_tuned_svc,
+        "Random Forest": build_tuned_rfc,
+    }[name](X, y)[1]
     model = classifier(**params)
-
     if name == 'Neural Network':
         model.fit(X, y, epochs=10, batch_size=32, verbose=0)
-
     else:
         model.fit(X, y)
-
     return model
 
 
