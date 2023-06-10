@@ -21,7 +21,7 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
     return np.sum(triggered_predictions[classified_as_malware] == target_class) / len(classified_as_malware)
 
 
-def run_cv_trigger_size_known(X, y, classifier, name, trigger, trigger_size,
+def run_cv_trigger_size_known(X, y, name, trigger, trigger_size,
                               triggered_samples_ration, target_class=0):
     results = []
     try:
@@ -45,7 +45,7 @@ def run_cv_trigger_size_known(X, y, classifier, name, trigger, trigger_size,
                 if triggered:
                     X_train[index] = apply_trigger(X_train[index], trigger)
                     y_train[index] = target_class  # marking malware application as benign
-            model = fit_model(X_train, y_train, classifier, name)
+            model = fit_model(X_train, y_train, name)
 
             y_pred = model.predict(X_test)
             y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
@@ -74,13 +74,13 @@ def run_cv_trigger_size_known(X, y, classifier, name, trigger, trigger_size,
     return results
 
 
-def run_cv(X, y, classifier, name):
+def run_cv(X, y, name):
     results = []
     try:
         rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
 
         for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
-            model = fit_model(X[train_idx], y[train_idx], classifier, name)
+            model = fit_model(X[train_idx], y[train_idx], name)
 
             y_pred = model.predict(X[test_idx])
             y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
@@ -106,13 +106,12 @@ def run_cv(X, y, classifier, name):
     return results
 
 
-def fit_model(X, y, classifier, name):
-    params = {
+def fit_model(X, y, name):
+    model = {
         "Neural Network": build_tuned_nn,
         "SVM": build_tuned_svc,
         "Random Forest": build_tuned_rfc,
-    }[name](X, y)[1]
-    model = classifier(**params)
+    }[name](X, y)
     if name == 'Neural Network':
         model.fit(X, y, epochs=10, batch_size=32, verbose=0)
     else:
