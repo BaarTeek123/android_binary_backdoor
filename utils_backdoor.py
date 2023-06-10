@@ -1,12 +1,15 @@
-from random import random
+import random
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+import tensorflow_federated as tff
 from sklearn.metrics import classification_report
 from sklearn.model_selection import RepeatedStratifiedKFold
 
 from CrossValidation import SortedTimeBasedCrossValidation
 from backdoor_attacks import apply_trigger
+from classifiers import create_nn
 
 
 def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: int) -> float:
@@ -21,10 +24,12 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
 
 
 def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_size,
-                              triggered_samples_ration, target_class=0):
+                              triggered_samples_ration, n_clients, n_rounds, n_malicious_clients, target_class=0):
     results = []
     number_of_features = len(X[0])
-
+    
+    malicious_clients = np.random.choice(range(n_clients), size=n_malicious_clients, replace=False)
+    
     df = pd.read_csv('csv_files/merged_df_with_dates.csv')
     cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
                                         date_column_name_sort_by='vt_scan_date')
@@ -36,14 +41,45 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
         X_test = X[test_idx]
         y_test = y[test_idx]
 
-        samples_with_trigger = np.array(
-            tuple(map(lambda _: int(random() < triggered_samples_ration), range(len(X_train)))))
-        # randomly selecting samples with trigger
-        for index, triggered in enumerate(samples_with_trigger):
-            if triggered:
-                X_train[index] = apply_trigger(X_train[index], trigger)
-                y_train[index] = target_class  # marking malware application as benign
-        model = fit_model(X_train, y_train, classifier, params, name)
+        client_data = []
+        for i in range(n_clients):
+            start = i * len(X_train) // n_clients
+            end = (i + 1) * len(X_train) // n_clients
+            X_client = X_train[start:end]
+            y_client = y_train[start:end]
+            if i not in malicious_clients:
+                samples_with_trigger = np.array(
+                    tuple(map(lambda _: int(random.random() < triggered_samples_ration), range(len(X_client)))))
+                # randomly selecting samples with trigger
+                for index, triggered in enumerate(samples_with_trigger):
+                    if triggered:
+                        X_client[index] = apply_trigger(X_client[index], trigger)
+                        y_client[index] = target_class  # marking malware application as benign
+            client_data.append(
+                tf.data.Dataset.from_tensor_slices((X_client, y_client)).batch(1))
+
+        # Create the federated data
+        federated_data = [client_data[i] for i in range(n_clients)]
+
+        def model_fn():
+            keras_model = create_nn(input_shape=(X.shape[1],), compile=False)
+            return tff.learning.models.from_keras_model(
+                keras_model,
+                input_spec=client_data[0].element_spec,
+                loss=tf.keras.losses.BinaryCrossentropy(),
+                metrics=[tf.keras.metrics.BinaryAccuracy()]
+            )
+
+        # Create the TFF model and federated learning process
+        federated_averaging_process = tff.learning.algorithms.build_weighted_fed_avg(
+            model_fn,
+            client_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=0.02),
+            server_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=1.0)
+        )
+        model_weights = train(federated_averaging_process, federated_data, n_clients, n_rounds, n_clients)
+
+        model = create_nn(input_shape=(X.shape[1],))
+        model.set_weights(model_weights)
 
         y_pred = model.predict(X_test)
         y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
@@ -68,6 +104,7 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
             if label.isdigit()
         )
     return results
+
 
 def run_cv(X, y, classifier, params, name):
     results = []
@@ -118,3 +155,17 @@ def get_model_weights(model):
     else:
         weights_array = [w.flatten() for layer in model.layers for w in layer.get_weights()]
         return np.concatenate(weights_array, axis=None)
+
+
+def train(federated_averaging_process, federated_data, num_clients_per_round, num_rounds, num_clients):
+    state = federated_averaging_process.initialize()
+
+    for round_num in range(num_rounds):
+        sampled_clients = np.random.choice(range(num_clients), size=num_clients_per_round, replace=False)
+        sampled_train_data = [federated_data[i] for i in sampled_clients]
+
+        result = federated_averaging_process.next(state, sampled_train_data)
+        state = result.state
+        print(result.metrics['client_work']['train'])
+    return state.global_model_weights.trainable
+
