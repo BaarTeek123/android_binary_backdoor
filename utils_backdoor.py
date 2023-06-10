@@ -4,8 +4,8 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 
 
 def calculate_attack_success_rate(predicted: np.array, with_trigger: np.array, target_class: int) -> float:
-    with_trigger = predicted[np.where(with_trigger == 1)]
-    return len(np.where(with_trigger == target_class)[0]) / len(with_trigger)
+    predicted_with_trigger = predicted[np.where(with_trigger == 1)]
+    return len(np.where(predicted_with_trigger == target_class)[0]) / len(predicted_with_trigger)
 
 
 def run_cv_trigger_size_known(X, y, classifier, params, name, with_trigger, trigger_size,
