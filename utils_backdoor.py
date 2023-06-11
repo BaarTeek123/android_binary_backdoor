@@ -24,7 +24,7 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
 
 
 def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_size,
-                              triggered_samples_ration, n_clients, n_rounds, n_malicious_clients, target_class=0):
+                              triggered_samples_ration, n_clients, n_rounds, n_malicious_clients, target_class):
     results = []
     number_of_features = len(X[0])
     
@@ -47,7 +47,7 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
             end = (i + 1) * len(X_train) // n_clients
             X_client = X_train[start:end]
             y_client = y_train[start:end]
-            if i not in malicious_clients:
+            if i in malicious_clients and trigger:
                 samples_with_trigger = np.array(
                     tuple(map(lambda _: int(random.random() < triggered_samples_ration), range(len(X_client)))))
                 # randomly selecting samples with trigger
@@ -90,7 +90,6 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
         # Generate classification report
         report = classification_report(y_test, y_pred, output_dict=True)
 
-        asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
         results.extend(
             {
                 'Method': name,
@@ -100,7 +99,7 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
                 'Recall': metrics['recall'],
                 'F1-score': metrics['f1-score'],
                 'Support': metrics['support'],
-                'ASR': asr,
+                'ASR': calculate_attack_success_rate(model, X_test, y_test, trigger, target_class) if trigger_size else 0,
                 'TAP': 100 * round(trigger_size / number_of_features, 3)
             }
             for label, metrics in report.items()
