@@ -38,11 +38,9 @@ def run_cv_trigger_size_known(X, y, name, trigger, trigger_size,
             X_test = X[test_idx]
             y_test = y[test_idx]
 
-            samples_with_trigger = np.array(
-                tuple(map(lambda _: int(random() < triggered_samples_ration), range(len(X_train)))))
             # randomly selecting samples with trigger
-            for index, triggered in enumerate(samples_with_trigger):
-                if triggered:
+            for index in range(len(X_train)):
+                if random() < triggered_samples_ration:
                     X_train[index] = apply_trigger(X_train[index], trigger)
                     y_train[index] = target_class  # marking malware application as benign
             model = fit_model(X_train, y_train, name)
