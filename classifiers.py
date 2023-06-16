@@ -18,14 +18,14 @@ def build_model_nn(hp):
     return model
 
 
-def build_tuned_nn(x_train, y_train, use_callback=True):
-    if use_callback:
-        stop_early = callbacks.EarlyStopping(monitor='val_loss', patience=5)
-        tuner = RandomSearch(build_model_nn, objective='val_accuracy',
-                             max_trials=5, overwrite=True, directory='./project', callbacks=[stop_early])
-    else:
-        tuner = RandomSearch(build_model_nn, objective='val_accuracy',
-                             max_trials=5, overwrite=True, directory='./project')
+def build_tuned_nn(x_train, y_train, use_callback = True):
+    # if use_callback:
+    #     stop_early = callbacks.EarlyStopping(monitor='val_loss', patience=5)
+    #     tuner = RandomSearch(build_model_nn, objective='val_accuracy',
+    #                      max_trials=5, overwrite=True, directory='./project', callback = [stop_early])
+    # else:
+    tuner = RandomSearch(build_model_nn, objective='val_accuracy',
+                         max_trials=5, overwrite=True, directory='./project')
 
     # Perform hyperparameter search
     tuner.search(x_train, y_train, epochs=100, validation_split=0.15)
@@ -33,8 +33,7 @@ def build_tuned_nn(x_train, y_train, use_callback=True):
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
     model = tuner.hypermodel.build(best_hps)
-    return model, best_hps
-
+    return model
 
 param_grid_rfc = {
     'n_estimators': [10, 50, 100, 200],
@@ -51,35 +50,40 @@ param_grid_svc = {
 }
 
 
-def build_tuned_rfc(x_train, y_train, param_grid):
+def build_tuned_rfc(x_train, y_train, param_grid=None):
+    if param_grid is None:
+        param_grid = param_grid_rfc
     rf = RandomForestClassifier()
 
-    rf_random = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=100, cv=3, random_state=42)
+    rf_random = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, n_iter=100, cv=3, n_jobs=8,
+                                   random_state=42)
     rf_random.fit(x_train, y_train)
     best_params = rf_random.best_params_
-    return rf_random, best_params
+    return RandomForestClassifier(**best_params)
 
 
-def build_tuned_svc(x_train, y_train, param_grid):
+def build_tuned_svc(x_train, y_train, param_grid=None):
+    if param_grid is None:
+        param_grid = param_grid_svc
     svc = svm.SVC()
 
-    grid_search = GridSearchCV(estimator=svc, param_grid=param_grid, cv=3)
+    grid_search = GridSearchCV(estimator=svc, param_grid=param_grid, cv=3, n_jobs=8)
     grid_search.fit(x_train, y_train)
 
     best_params = grid_search.best_params_
-    return grid_search, best_params
+    return svm.SVC(**best_params)
 
 
 def create_nn(input_shape, compile=True):
     # create a model
     model = Sequential([
-        layers.Input(shape=input_shape, ),
-        layers.Dense(80, activation='relu'),
-        layers.Dense(60, activation='relu'),
-        layers.Dense(40, activation='relu'),
-        layers.Dense(1, activation='sigmoid')
-    ])
+        layers.Input(shape = input_shape,),
+    layers.Dense(80, activation='relu'),
+    layers.Dense(60, activation='relu'),
+    layers.Dense(40, activation='relu'),
+    layers.Dense(1, activation='sigmoid')])
     # compile a model
     if compile:
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['binary_accuracy'])
     return model
+

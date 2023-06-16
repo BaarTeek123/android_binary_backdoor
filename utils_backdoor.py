@@ -5,8 +5,6 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import tensorflow_federated as tff
-from sklearn.metrics import classification_report
-from sklearn.model_selection import RepeatedStratifiedKFold
 
 from CrossValidation import SortedTimeBasedCrossValidation
 from backdoor_attacks import apply_trigger
@@ -24,23 +22,13 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
     return np.sum(triggered_predictions[classified_as_malware] == target_class) / len(classified_as_malware)
 
 
-def run_cv_trigger_size_known(X, y, classifier, params, name, trigger_generator, trigger_size,
+def run_cv_trigger_size_known(classifier, params, name, trigger_generator, trigger_size,
                               triggered_samples_ration, n_clients, n_rounds, n_malicious_clients, target_class):
-    results = []
-    number_of_features = len(X[0])
-
     malicious_clients = np.random.choice(range(n_clients), size=n_malicious_clients, replace=False)
 
-    df = pd.read_csv('csv_files/merged_df_with_dates.csv')
-    cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
-                                        date_column_name_sort_by='vt_scan_date')
+    X, y, cv, number_of_features = _extract_data()
     for fold_no, (train_idx, test_idx) in cv.folds.items():
-        train_idx = train_idx['index'].to_numpy()
-        test_idx = test_idx['index'].to_numpy()
-        X_train = deepcopy(X[train_idx])
-        y_train = deepcopy(y[train_idx])
-        X_test = deepcopy(X[test_idx])
-        y_test = deepcopy(y[test_idx])
+        X_train, X_test, y_train, y_test = _divide_set(X, y, train_idx, test_idx)
         trigger = trigger_generator(X_train.shape[1], trigger_size)
         client_data = []
         for i in range(n_clients):
@@ -83,29 +71,25 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger_generator,
         model = create_nn(input_shape=(X.shape[1],))
         model.set_weights(model_weights)
 
-        y_pred = model.predict(X_test)
-        y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
 
-        # Generate classification report
-        report = classification_report(y_test, y_pred, output_dict=True)
+def _extract_data(file_path='csv_files/merged_df_with_dates.csv'):
+    df = pd.read_csv(file_path)
+    cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
+                                        date_column_name_sort_by='vt_scan_date')
+    X = df.drop('is_malware', axis=1).select_dtypes(np.number)
+    y = df['is_malware']
+    number_of_features = X.shape[1]
+    return X, y, cv, number_of_features
 
-        results.extend(
-            {
-                'Method': name,
-                'Fold': fold_no,
-                'Class': int(label),
-                'Precision': metrics['precision'],
-                'Recall': metrics['recall'],
-                'F1-score': metrics['f1-score'],
-                'Support': metrics['support'],
-                'ASR': calculate_attack_success_rate(model, X_test, y_test, trigger,
-                                                     target_class) if trigger_size else 0,
-                'TAP': 100 * round(trigger_size / number_of_features, 3)
-            }
-            for label, metrics in report.items()
-            if label.isdigit()
-        )
-    return results
+
+def _divide_set(X, y, train_idx, test_idx):
+    train_idx = train_idx['index'].to_numpy()
+    test_idx = test_idx['index'].to_numpy()
+    X_train = deepcopy(X.values[train_idx])
+    y_train = deepcopy(y.values[train_idx])
+    X_test = deepcopy(X.values[test_idx])
+    y_test = deepcopy(y.values[test_idx])
+    return X_train, X_test, y_train, y_test
 
 
 def fit_model(X, y, classifier, params, name):
