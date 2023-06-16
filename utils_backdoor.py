@@ -1,4 +1,5 @@
 import random
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -23,24 +24,24 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
     return np.sum(triggered_predictions[classified_as_malware] == target_class) / len(classified_as_malware)
 
 
-def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_size,
+def run_cv_trigger_size_known(X, y, classifier, params, name, trigger_generator, trigger_size,
                               triggered_samples_ration, n_clients, n_rounds, n_malicious_clients, target_class):
     results = []
     number_of_features = len(X[0])
-    
+
     malicious_clients = np.random.choice(range(n_clients), size=n_malicious_clients, replace=False)
-    
+
     df = pd.read_csv('csv_files/merged_df_with_dates.csv')
     cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
                                         date_column_name_sort_by='vt_scan_date')
     for fold_no, (train_idx, test_idx) in cv.folds.items():
         train_idx = train_idx['index'].to_numpy()
         test_idx = test_idx['index'].to_numpy()
-        X_train = X[train_idx]
-        y_train = y[train_idx]
-        X_test = X[test_idx]
-        y_test = y[test_idx]
-
+        X_train = deepcopy(X[train_idx])
+        y_train = deepcopy(y[train_idx])
+        X_test = deepcopy(X[test_idx])
+        y_test = deepcopy(y[test_idx])
+        trigger = trigger_generator(X_train.shape[1], trigger_size)
         client_data = []
         for i in range(n_clients):
             start = i * len(X_train) // n_clients
@@ -48,11 +49,9 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
             X_client = X_train[start:end]
             y_client = y_train[start:end]
             if i in malicious_clients and trigger:
-                samples_with_trigger = np.array(
-                    tuple(map(lambda _: int(random.random() < triggered_samples_ration), range(len(X_client)))))
                 # randomly selecting samples with trigger
-                for index, triggered in enumerate(samples_with_trigger):
-                    if triggered:
+                for index in range(len(X_client)):
+                    if random.random() < triggered_samples_ration:
                         X_client[index] = apply_trigger(X_client[index], trigger)
                         y_client[index] = target_class  # marking malware application as benign
             client_data.append(
@@ -99,37 +98,9 @@ def run_cv_trigger_size_known(X, y, classifier, params, name, trigger, trigger_s
                 'Recall': metrics['recall'],
                 'F1-score': metrics['f1-score'],
                 'Support': metrics['support'],
-                'ASR': calculate_attack_success_rate(model, X_test, y_test, trigger, target_class) if trigger_size else 0,
+                'ASR': calculate_attack_success_rate(model, X_test, y_test, trigger,
+                                                     target_class) if trigger_size else 0,
                 'TAP': 100 * round(trigger_size / number_of_features, 3)
-            }
-            for label, metrics in report.items()
-            if label.isdigit()
-        )
-    return results
-
-
-def run_cv(X, y, classifier, params, name):
-    results = []
-    rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
-
-    for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
-        model = fit_model(X[train_idx], y[train_idx], classifier, params, name)
-
-        y_pred = model.predict(X[test_idx])
-        y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
-
-        # Generate classification report
-        report = classification_report(y[test_idx], y_pred, output_dict=True)
-
-        results.extend(
-            {
-                'Method': name,
-                'Fold': fold_no,
-                'Class': int(label),
-                'Precision': metrics['precision'],
-                'Recall': metrics['recall'],
-                'F1-score': metrics['f1-score'],
-                'Support': metrics['support'],
             }
             for label, metrics in report.items()
             if label.isdigit()
@@ -170,4 +141,3 @@ def train(federated_averaging_process, federated_data, num_clients_per_round, nu
         state = result.state
         print(result.metrics['client_work']['train'])
     return state.global_model_weights.trainable
-
