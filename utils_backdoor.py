@@ -1,3 +1,4 @@
+from copy import deepcopy
 from random import random
 
 import numpy as np
@@ -33,10 +34,10 @@ def run_cv_trigger_size_known(X, y, name, trigger, trigger_size,
         for fold_no, (train_idx, test_idx) in cv.folds.items():
             train_idx = train_idx['index'].to_numpy()
             test_idx = test_idx['index'].to_numpy()
-            X_train = X[train_idx]
-            y_train = y[train_idx]
-            X_test = X[test_idx]
-            y_test = y[test_idx]
+            X_train = deepcopy(X[train_idx])
+            y_train = deepcopy(y[train_idx])
+            X_test = deepcopy(X[test_idx])
+            y_test = deepcopy(y[test_idx])
 
             # randomly selecting samples with trigger
             for index in range(len(X_train)):

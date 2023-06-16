@@ -2,7 +2,6 @@ import numpy as np
 import random
 
 # add a random number
-random.seed(42)
 
 
 def add_random_binary(row, random_value):
