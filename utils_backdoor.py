@@ -4,7 +4,6 @@ from random import random
 import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
-from sklearn.model_selection import RepeatedStratifiedKFold
 
 from CrossValidation import SortedTimeBasedCrossValidation
 from backdoor_attacks import apply_trigger
@@ -22,87 +21,93 @@ def calculate_attack_success_rate(model, X_test, y_test, trigger, target_class: 
     return np.sum(triggered_predictions[classified_as_malware] == target_class) / len(classified_as_malware)
 
 
-def run_cv_trigger_size_known(X, y, name, trigger, trigger_size,
-                              triggered_samples_ration, target_class=0):
+def run_cv_random_trigger(name, trigger_generator, trigger_size, triggered_samples_ration, target_class=0):
     results = []
     try:
-        number_of_features = len(X[0])
-
-        df = pd.read_csv('csv_files/merged_df_with_dates.csv')
-        cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
-                                            date_column_name_sort_by='vt_scan_date')
+        X, y, cv, number_of_features = _extract_data()
         for fold_no, (train_idx, test_idx) in cv.folds.items():
-            train_idx = train_idx['index'].to_numpy()
-            test_idx = test_idx['index'].to_numpy()
-            X_train = deepcopy(X[train_idx])
-            y_train = deepcopy(y[train_idx])
-            X_test = deepcopy(X[test_idx])
-            y_test = deepcopy(y[test_idx])
+            X_train, X_test, y_train, y_test = _divide_set(X, y, train_idx, test_idx)
+            n_features = X.shape[1]
+            trigger = trigger_generator(n_features, trigger_size)
 
             # randomly selecting samples with trigger
-            for index in range(len(X_train)):
-                if random() < triggered_samples_ration:
-                    X_train[index] = apply_trigger(X_train[index], trigger)
-                    y_train[index] = target_class  # marking malware application as benign
-            model = fit_model(X_train, y_train, name)
-
-            y_pred = model.predict(X_test)
-            y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
-
-            # Generate classification report
-            report = classification_report(y_test, y_pred, output_dict=True)
-
-            asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
-            results.extend(
-                {
-                    'Method': name,
-                    'Fold': fold_no,
-                    'Class': int(label),
-                    'Precision': metrics['precision'],
-                    'Recall': metrics['recall'],
-                    'F1-score': metrics['f1-score'],
-                    'Support': metrics['support'],
-                    'ASR': asr,
-                    'TAP': 100 * round(trigger_size / number_of_features, 3)
-                }
-                for label, metrics in report.items()
-                if label.isdigit()
-            )
+            _apply_trigger_and_train(X_train, X_test, y_train, y_test, triggered_samples_ration, trigger, name,
+                                     target_class, results, fold_no, trigger_size, number_of_features)
     except KeyboardInterrupt:
         pass
     return results
 
 
-def run_cv(X, y, name):
+def run_cv_genetic_trigger(name, genetic_trigger_generator, trigger_size, triggered_samples_ration, target_class=0):
     results = []
     try:
-        rskf = RepeatedStratifiedKFold(n_splits=2, n_repeats=5, random_state=368)
+        X, y, cv, number_of_features = _extract_data()
+        retrain_model = lambda training_set: get_model_weights(
+            fit_model(training_set[0], training_set[1], name))
+        trigger = genetic_trigger_generator(trigger_size, (X, y,), retrain_model)
+        trigger = tuple(map(lambda elem: elem if elem else None, trigger))
+        for fold_no, (train_idx, test_idx) in cv.folds.items():
+            X_train, X_test, y_train, y_test = _divide_set(X, y, train_idx, test_idx)
 
-        for fold_no, (train_idx, test_idx) in enumerate(rskf.split(X, y)):
-            model = fit_model(X[train_idx], y[train_idx], name)
-
-            y_pred = model.predict(X[test_idx])
-            y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
-
-            # Generate classification report
-            report = classification_report(y[test_idx], y_pred, output_dict=True)
-
-            results.extend(
-                {
-                    'Method': name,
-                    'Fold': fold_no,
-                    'Class': int(label),
-                    'Precision': metrics['precision'],
-                    'Recall': metrics['recall'],
-                    'F1-score': metrics['f1-score'],
-                    'Support': metrics['support'],
-                }
-                for label, metrics in report.items()
-                if label.isdigit()
-            )
+            # randomly selecting samples with trigger
+            _apply_trigger_and_train(X_train, X_test, y_train, y_test, triggered_samples_ration, trigger, name,
+                                     target_class, results, fold_no, trigger_size, number_of_features)
     except KeyboardInterrupt:
         pass
     return results
+
+
+def _extract_data(file_path='csv_files/merged_df_with_dates.csv'):
+    df = pd.read_csv(file_path)
+    cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
+                                        date_column_name_sort_by='vt_scan_date')
+    X = df.drop('is_malware', axis=1).select_dtypes(np.number)
+    y = df['is_malware']
+    number_of_features = X.shape[1]
+    return X, y, cv, number_of_features
+
+
+def _apply_trigger_and_train(X_train, X_test, y_train, y_test, triggered_samples_ration, trigger, name, target_class,
+                             results, fold_no, trigger_size,
+                             number_of_features):
+    for index in range(len(X_train)):
+        if random() < triggered_samples_ration:
+            X_train[index] = apply_trigger(X_train[index], trigger)
+            y_train[index] = target_class  # marking malware application as benign
+    model = fit_model(X_train, y_train, name)
+
+    y_pred = model.predict(X_test)
+    y_pred = np.round(y_pred).astype(int).reshape(y_pred.shape[0])
+
+    # Generate classification report
+    report = classification_report(y_test, y_pred, output_dict=True)
+
+    asr = calculate_attack_success_rate(model, X_test, y_test, trigger, target_class)
+    results.extend(
+        {
+            'Method': name,
+            'Fold': fold_no,
+            'Class': int(label),
+            'Precision': metrics['precision'],
+            'Recall': metrics['recall'],
+            'F1-score': metrics['f1-score'],
+            'Support': metrics['support'],
+            'ASR': asr,
+            'TAP': 100 * round(trigger_size / number_of_features, 3)
+        }
+        for label, metrics in report.items()
+        if label.isdigit()
+    )
+
+
+def _divide_set(X, y, train_idx, test_idx):
+    train_idx = train_idx['index'].to_numpy()
+    test_idx = test_idx['index'].to_numpy()
+    X_train = deepcopy(X.values[train_idx])
+    y_train = deepcopy(y.values[train_idx])
+    X_test = deepcopy(X.values[test_idx])
+    y_test = deepcopy(y.values[test_idx])
+    return X_train, X_test, y_train, y_test
 
 
 def fit_model(X, y, name):
