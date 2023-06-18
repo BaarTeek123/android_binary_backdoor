@@ -2,7 +2,6 @@ import numpy as np
 import random
 
 # add a random number
-random.seed(42)
 
 
 def add_random_binary(row, random_value):
@@ -61,7 +60,8 @@ def initialize_population(number_of_features, trigger_size, population_size=None
 def integrate_trigger(training_set, trigger):
     """Integrates the trigger into the training set"""
     X, y = training_set
-    poisoned_training_set = np.array([np.array([max(row[i], trigger[i]) for i in range(len(row))]) for row in X])
+    poisoned_training_set = np.array([np.array([max(row[i], trigger[i]) for i in range(len(row))]) for row in
+                                      (X if isinstance(X, np.ndarray) else X.values)])
 
     return poisoned_training_set, y
 
@@ -106,7 +106,7 @@ def create_genetic_trigger(trigger_size, training_set, retrain_model, epsilon=0.
     """
     feature_weights = retrain_model(training_set)
     number_of_weights = len(feature_weights)
-    number_of_features = len(training_set[0][0])
+    number_of_features = training_set[0].shape[1]
     population = initialize_population(number_of_features, trigger_size)
     population_size = len(population)
 
