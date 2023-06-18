@@ -1,12 +1,13 @@
 import os
 from collections import defaultdict
-from itertools import product, combinations, permutations
+from itertools import product, permutations
 
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import wilcoxon, ttest_rel, normaltest
 import seaborn as sns
 from numpy import mean
+from scipy.stats import wilcoxon, ttest_rel, normaltest
 
 
 def plot_history(history, save_path: str = None):
@@ -83,30 +84,36 @@ def all_asrs(results_path, calc_mean=True):
 def plot_classifier_comparison_constant_triggered_samples_percentage(results_path='random_results'):
     all_results = all_asrs(results_path)
     for triggered_samples_percentage in range(1, 11):
+        title = f'Classifier comparison triggered samples {triggered_samples_percentage}%'
         for classifier in classifiers:
-            plt.title(f'{classifier} triggered samples {triggered_samples_percentage}%')
+            plt.title(title)
             plt.plot(list(map(lambda elem: elem / n_features * 100, range(1, 11))),
                      [all_results[classifier][trigger_size][triggered_samples_percentage / 100] * 100 for trigger_size
                       in range(1, 11)])
         plt.legend(classifiers)
         plt.ylabel('ASR [%]')
-        plt.xlabel('Trigger size [%]')
-        plt.show()
+        plt.ylabel('Trigger Area Percentage [%]')
+        plt.savefig(title + '.png')
+        plt.clf()
+        # plt.show()
 
 
 def plot_classifier_comparison_constant_trigger_size(results_path='random_results'):
     all_results = all_asrs(results_path)
     for trigger_size in range(1, 11):
+        title = f'Classifier comparison trigger size {round(trigger_size / n_features * 100, 1)}%'
         for classifier in classifiers:
-            plt.title(f'{classifier} trigger size {round(trigger_size / n_features * 100, 1)}%')
+            plt.title(title)
             plt.plot(list(range(1, 11)),
                      [all_results[classifier][trigger_size][triggered_samples_percentage / 100] * 100 for
                       triggered_samples_percentage
                       in range(1, 11)])
         plt.legend(classifiers)
         plt.ylabel('ASR [%]')
-        plt.xlabel('Triggered samples [%]')
-        plt.show()
+        plt.xlabel('Triggered Samples Percentage [%]')
+        plt.savefig(title + '.png')
+        plt.clf()
+        # plt.show()
 
 
 def compare(results_path):
@@ -135,12 +142,12 @@ def show_comparison(results_path='random_results'):
         # Create a color map
         cmap = sns.diverging_palette(220, 10, as_cmap=True)
         table_data = np.array(list(list(map(lambda v: round(v, 2), value.values())) for value in table_data.values()))
-        sns.heatmap(table_data, annot=True, cmap=cmap, vmin=0, vmax=0.1)
+        sns.heatmap(table_data, annot=True, cmap=cmap, vmin=0, vmax=0.1, cbar=False)
 
         # Add labels and title
-        plt.xlabel('Triggered samples [%]')
-        plt.ylabel('Trigger size')
-        plt.title(key)
+        plt.xlabel('Triggered Samples Percentage [%]')
+        plt.ylabel('Trigger Area Percentage [%]')
+        plt.title(key + ' comparison')
 
         # Mark values below 0.05 as green
         threshold = 0.05
@@ -153,9 +160,16 @@ def show_comparison(results_path='random_results'):
                     plt.fill([j, j, j + 1, j + 1], [i, i + 1, i + 1, i], color='red')
         plt.xticks(np.arange(0.5, len(table_data[0]) + 0.5), np.vectorize(lambda elem: round(elem, 1))(np.arange(1, len(table_data[0]) + 1)/n_features*100))
         plt.yticks(np.arange(0.5, len(table_data) + 0.5), np.arange(1, len(table_data) + 1))
-        plt.show()
+        green_patch = mpatches.Patch(color='green', label='p-value < 0.05')
+        red_patch = mpatches.Patch(color='red', label='p-value >= 0.05')
+
+        # Add legend
+        plt.legend(handles=[green_patch, red_patch], loc='lower right')
+        plt.savefig(key + '.png')
+        plt.clf()
 
 
 if __name__ == '__main__':
     # plot_classifier_comparison_constant_trigger_size()
+    # plot_classifier_comparison_constant_triggered_samples_percentage()
     show_comparison()
