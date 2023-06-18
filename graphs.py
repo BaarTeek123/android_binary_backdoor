@@ -68,16 +68,10 @@ def all_asrs(results_path, calc_mean=True):
             classifier_part[trigger_size] = {}
         trigger_size_part = classifier_part[trigger_size]
         if triggered_percentage / 100 not in trigger_size_part or len(
-                trigger_size_part[triggered_percentage / 100]) != 20:
-            trigger_size_part[triggered_percentage / 100] = trigger_size_part.get(triggered_percentage / 100, []) + [1
-                                                                                                                     for
-                                                                                                                     _
-                                                                                                                     in
-                                                                                                                     range(
-                                                                                                                         20 - len(
-                                                                                                                             trigger_size_part.get(
-                                                                                                                                 triggered_percentage / 100,
-                                                                                                                                 [])))]
+                trigger_size_part[triggered_percentage / 100]) != 30:
+            trigger_size_part[triggered_percentage / 100] = trigger_size_part.get(
+                triggered_percentage / 100, []) + [1 for _ in range(30 - len(trigger_size_part.get(
+                triggered_percentage / 100, [])))]
     for classifier, trigger_size, triggered_percentage in product(classifiers, range(1, 11), range(1, 11)):
         if not calc_mean:
             continue
