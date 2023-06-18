@@ -41,10 +41,10 @@ def run_cv_random_trigger(name, trigger_generator, trigger_size, triggered_sampl
 def run_cv_genetic_trigger(name, genetic_trigger_generator, trigger_size, triggered_samples_ration, target_class=0):
     results = []
     try:
-        X, y, cv, number_of_features = _extract_data()
+        X, y, cv, number_of_features = _extract_data(n=15)
         retrain_model = lambda training_set: get_model_weights(
             fit_model(training_set[0], training_set[1], name))
-        trigger = genetic_trigger_generator(trigger_size, (X, y,), retrain_model)
+        trigger = genetic_trigger_generator(trigger_size, (deepcopy(X), deepcopy(y),), retrain_model)
         trigger = tuple(map(lambda elem: elem if elem else None, trigger))
         for fold_no, (train_idx, test_idx) in cv.folds.items():
             X_train, X_test, y_train, y_test = _divide_set(X, y, train_idx, test_idx)
@@ -57,9 +57,9 @@ def run_cv_genetic_trigger(name, genetic_trigger_generator, trigger_size, trigge
     return results
 
 
-def _extract_data(file_path='csv_files/merged_df_with_dates.csv'):
+def _extract_data(file_path='csv_files/merged_df_with_dates.csv', n=5):
     df = pd.read_csv(file_path)
-    cv = SortedTimeBasedCrossValidation(df, k=200, n=5, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
+    cv = SortedTimeBasedCrossValidation(df, k=200, n=n, test_ratio=0.5, mixed_ratio=0.1, drop_ratio=0.05,
                                         date_column_name_sort_by='vt_scan_date')
     X = df.drop('is_malware', axis=1).select_dtypes(np.number)
     y = df['is_malware']

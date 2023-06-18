@@ -60,7 +60,8 @@ def initialize_population(number_of_features, trigger_size, population_size=None
 def integrate_trigger(training_set, trigger):
     """Integrates the trigger into the training set"""
     X, y = training_set
-    poisoned_training_set = np.array([np.array([max(row[i], trigger[i]) for i in range(len(row))]) for row in X.values])
+    poisoned_training_set = np.array([np.array([max(row[i], trigger[i]) for i in range(len(row))]) for row in
+                                      (X if isinstance(X, np.ndarray) else X.values)])
 
     return poisoned_training_set, y
 
