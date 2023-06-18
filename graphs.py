@@ -83,37 +83,56 @@ def all_asrs(results_path, calc_mean=True):
 
 def plot_classifier_comparison_constant_triggered_samples_percentage(results_path='random_results'):
     all_results = all_asrs(results_path)
-    for triggered_samples_percentage in range(1, 11):
-        title = f'Classifier comparison triggered samples {triggered_samples_percentage}%'
+    _, axs = plt.subplots(2, 2)
+    for triggered_samples_percentage in range(1, 5):
+        title = f'Classifier comparison TSP {triggered_samples_percentage}%'
         for classifier in classifiers:
-            plt.title(title)
-            plt.plot(list(map(lambda elem: elem / n_features * 100, range(1, 11))),
-                     [all_results[classifier][trigger_size][triggered_samples_percentage / 100] * 100 for trigger_size
-                      in range(1, 11)])
-        plt.legend(classifiers)
-        plt.ylabel('ASR [%]')
-        plt.ylabel('Trigger Area Percentage [%]')
-        plt.savefig(title + '.png')
-        plt.clf()
-        # plt.show()
+            axs[(triggered_samples_percentage - 1) // 2, (triggered_samples_percentage - 1) % 2].set_title(title)
+            axs[(triggered_samples_percentage - 1) // 2, (triggered_samples_percentage - 1) % 2].plot(
+                list(map(lambda elem: elem / n_features * 100, range(1, 11))),
+                [all_results[classifier][trigger_size][triggered_samples_percentage / 100] * 100 for trigger_size
+                 in range(1, 11)])
+        legend = axs[(triggered_samples_percentage - 1) // 2, (triggered_samples_percentage - 1) % 2].legend(
+            classifiers)
+        legend.get_frame().set_facecolor('none')
+        axs[(triggered_samples_percentage - 1) // 2, (triggered_samples_percentage - 1) % 2].set_ylabel('ASR [%]')
+        axs[(triggered_samples_percentage - 1) // 2, (triggered_samples_percentage - 1) % 2].set_xlabel(
+            'Trigger Area Percentage [%]')
+    plt.subplots_adjust(hspace=0.5, wspace=0.5)
+    plt.savefig('classifier_comparison_TSP.png')
+    plt.clf()
+    # for triggered_samples_percentage in range(1, 11):
+    #     for classifier in classifiers:
+    #         plt.title(title)
+    #         plt.plot(list(map(lambda elem: elem / n_features * 100, range(1, 11))),
+    #                  [all_results[classifier][trigger_size][triggered_samples_percentage / 100] * 100 for trigger_size
+    #                   in range(1, 11)])
+    #     plt.legend(classifiers)
+    #     plt.savefig(title.replace(' ', '_').replace('.', '').replace('%', '') + '.png')
+    #     plt.clf()
+    # plt.show()
 
 
 def plot_classifier_comparison_constant_trigger_size(results_path='random_results'):
     all_results = all_asrs(results_path)
-    for trigger_size in range(1, 11):
-        title = f'Classifier comparison trigger size {round(trigger_size / n_features * 100, 1)}%'
+    _, axs = plt.subplots(2, 2)
+    for trigger_size in range(1, 5):
+        title = f'Classifier comparison TAP {round(trigger_size / n_features * 100, 1)}%'
         for classifier in classifiers:
-            plt.title(title)
-            plt.plot(list(range(1, 11)),
-                     [all_results[classifier][trigger_size][triggered_samples_percentage / 100] * 100 for
-                      triggered_samples_percentage
-                      in range(1, 11)])
-        plt.legend(classifiers)
-        plt.ylabel('ASR [%]')
-        plt.xlabel('Triggered Samples Percentage [%]')
-        plt.savefig(title + '.png')
-        plt.clf()
-        # plt.show()
+            axs[(trigger_size - 1) // 2, (trigger_size - 1) % 2].set_title(title)
+            axs[(trigger_size - 1) // 2, (trigger_size - 1) % 2].plot(list(range(1, 11)),
+                                                                      [all_results[classifier][trigger_size][
+                                                                           triggered_samples_percentage / 100] * 100 for
+                                                                       triggered_samples_percentage
+                                                                       in range(1, 11)])
+        legend = axs[(trigger_size - 1) // 2, (trigger_size - 1) % 2].legend(classifiers)
+        legend.get_frame().set_facecolor('none')
+        axs[(trigger_size - 1) // 2, (trigger_size - 1) % 2].set_ylabel('ASR [%]')
+        axs[(trigger_size - 1) // 2, (trigger_size - 1) % 2].set_xlabel('Triggered Samples Percentage [%]')
+    plt.subplots_adjust(hspace=0.5, wspace=0.5)
+    plt.savefig('classifier_comparison_TAP.png')
+    plt.clf()
+    # plt.show()
 
 
 def compare(results_path):
